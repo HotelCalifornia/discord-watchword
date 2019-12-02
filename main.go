@@ -3,8 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -13,9 +15,10 @@ import (
 )
 
 var (
-	Token      string
-	lastEvent  time.Time
-	recordTime time.Duration
+	Token       string
+	lastEvent   time.Time
+	recordTime  time.Duration
+	leaderboard map[string]int
 )
 
 func init() {
@@ -24,6 +27,7 @@ func init() {
 }
 
 func main() {
+	leaderboard = make(map[string]int)
 
 	// Create a new Discord session using the provided bot token.
 	dg, err := discordgo.New("Bot " + Token)
@@ -81,6 +85,8 @@ func handleWatchWord(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
+	leaderboard[m.Author.Username]++
+
 	if messageTime.Sub(lastEvent) > time.Hour {
 		printDays(s, m)
 	}
@@ -102,5 +108,45 @@ func printDays(s *discordgo.Session, m *discordgo.MessageCreate) {
 		recordTime = since
 	}
 
-	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Days without piss: %d\n\nTime since last piss: %s\nLongest time between pisses: %s", days, since.String(), recordTime.String()))
+	message := fmt.Sprintf("Days without piss: %d\n\nTime since last piss: %s\nLongest time between pisses: %s\nMost frequent pissers:\n%s", days, since.String(), recordTime.String(), getLeaderboard())
+
+	s.ChannelMessageSend(m.ChannelID, message)
+}
+
+type entry struct {
+	name  string
+	count int
+}
+
+type entrySlice []entry
+
+func (e entrySlice) Len() int {
+	return len(e)
+}
+
+func (e entrySlice) Less(i, j int) bool {
+	return e[i].count < e[j].count
+}
+
+func (e entrySlice) Swap(i, j int) {
+	e[i], e[j] = e[j], e[i]
+}
+
+func getLeaderboard() string {
+	var entries entrySlice
+
+	for n, c := range leaderboard {
+		if c > 1 {
+			entries = append(entries, entry{name: n, count: c})
+		}
+	}
+
+	sort.Sort(sort.Reverse(entries))
+
+	var s strings.Builder
+	for i := 0; i < 3 && i < len(entries); i++ {
+		s.WriteString(fmt.Sprintf("%s: %d\n", entries[i].name, entries[i].count))
+	}
+
+	return s.String()
 }
