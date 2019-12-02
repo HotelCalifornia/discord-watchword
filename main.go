@@ -96,7 +96,7 @@ func printDays(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	since := time.Since(lastEvent)
-	days := int(math.Round(since.Hours() / 24))
+	days := int(math.Floor(since.Hours() / 24))
 
 	if since > recordTime {
 		recordTime = since
